@@ -1,0 +1,45 @@
+rules_version = '2';
+
+// Reglas de seguridad de Firestore para Cita Clara.
+// - Cualquiera puede LEER los reportes (son anónimos y públicos, como el panel).
+// - Cualquiera puede CREAR un reporte, pero solo con los campos y valores permitidos.
+// - Nadie puede MODIFICAR ni BORRAR reportes desde la página.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Reporte de tiempo de espera: "fui a esta sede y esperé X minutos".
+    match /reportes_espera/{id} {
+      allow read: if true;
+      allow create: if request.resource.data.keys().hasOnly(['tramite', 'sede', 'minutos', 'dia', 'hora', 'creado', 'demo'])
+        && request.resource.data.tramite is string && request.resource.data.tramite.size() <= 20
+        && request.resource.data.sede is string && request.resource.data.sede.size() <= 40
+        && request.resource.data.minutos in [15, 45, 90, 150]
+        && request.resource.data.dia is int && request.resource.data.dia >= 0 && request.resource.data.dia <= 6
+        && request.resource.data.hora is int && request.resource.data.hora >= 0 && request.resource.data.hora <= 23
+        && request.resource.data.creado == request.time
+        && request.resource.data.demo is bool;
+      allow update, delete: if false;
+    }
+
+    // Reporte de problema: uno conocido ("a mí también me pasó") o uno nuevo escrito
+    // con palabras propias, ya clasificado por Gemini (categoria) y con su texto opcional.
+    match /reportes_error/{id} {
+      allow read: if true;
+      allow create: if request.resource.data.keys().hasOnly(['tramite', 'error', 'creado', 'demo', 'categoria', 'texto'])
+        && request.resource.data.tramite is string && request.resource.data.tramite.size() <= 20
+        && request.resource.data.error is string && request.resource.data.error.size() <= 20
+        && (!('categoria' in request.resource.data)
+            || request.resource.data.categoria in ['Documentos', 'Portal', 'Pago', 'Sede', 'Contraseña', 'Fuente', 'Otro'])
+        && (!('texto' in request.resource.data)
+            || (request.resource.data.texto is string && request.resource.data.texto.size() <= 300))
+        && request.resource.data.creado == request.time
+        && request.resource.data.demo is bool;
+      allow update, delete: if false;
+    }
+
+    // Todo lo demás está cerrado.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
