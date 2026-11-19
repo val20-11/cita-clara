@@ -1,0 +1,11 @@
+# Archivos temporales de Firebase
+.firebase/
+firebase-debug.log
+firestore-debug.log
+ui-debug.log
+
+# Dependencias y sistema
+node_modules/
+.DS_Store
+Thumbs.db
+__pycache__/
