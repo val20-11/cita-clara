@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cita Clara · Orientación ciudadana sobre trámites</title>
+  <meta name="description" content="Qué llevar, qué pasos seguir, cuál es el sitio oficial y cuándo ir a hacer tu trámite.">
+  <link rel="icon" href="logo.svg" type="image/svg+xml">
+
+  <!-- Tipografía: Public Sans (diseñada para sitios de gobierno, muy legible) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+  <!-- Leaflet: librería de mapas interactivos -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="tramite.css">
+</head>
+<body>
+  <a class="saltar" href="#app">Saltar al contenido</a>
+
+  <!-- Franja superior -->
+  <div class="franja">
+    <div class="contenedor franja-int">
+      <span>Plataforma ciudadana independiente · No es un sitio del gobierno</span>
+    </div>
+  </div>
+
+  <!-- Encabezado -->
+  <header class="encabezado">
+    <div class="contenedor encabezado-int">
+      <a href="#/" class="marca" aria-label="Cita Clara, ir al inicio">
+        <img src="logo.svg" alt="" width="36" height="36">
+        <span class="marca-texto">Cita Clara</span>
+      </a>
+      <button type="button" class="menu-movil" id="menu-movil" aria-expanded="false" aria-controls="menu">Menú</button>
+      <nav aria-label="Menú principal" class="nav" id="menu">
+        <a href="#/">Trámites</a>
+        <a href="#/asistente">Asistente</a>
+        <a href="#/panel">Transparencia</a>
+        <a href="#/acerca">Acerca de</a>
+      </nav>
+    </div>
+  </header>
+
+  <!-- Aquí app.js dibuja cada pantalla -->
+  <main id="app" tabindex="-1"></main>
+
+  <footer class="pie">
+    <div class="contenedor pie-int">
+      <div>
+        <div class="marca marca-pie"><img src="logo.svg" alt="" width="28" height="28"><span class="marca-texto">Cita Clara</span></div>
+        <p>Plataforma ciudadana independiente. No es un sitio oficial del gobierno ni de sus instituciones; siempre te enviamos a sus portales oficiales.</p>
+      </div>
+      <div>
+        <h2>Plataforma</h2>
+        <ul>
+          <li><a href="#/">Trámites</a></li>
+          <li><a href="#/asistente">Asistente</a></li>
+          <li><a href="#/panel">Transparencia</a></li>
+          <li><a href="#/acerca">Acerca de</a></li>
+        </ul>
+      </div>
+      <div>
+        <h2>Privacidad</h2>
+        <p>No pedimos ni guardamos datos personales. Los reportes son anónimos: sede, día, hora y tiempo de espera.</p>
+      </div>
+    </div>
+    <div class="contenedor pie-legal">© 2026 Cita Clara. Verifica siempre en el sitio oficial antes de acudir.</div>
+  </footer>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="datos.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
