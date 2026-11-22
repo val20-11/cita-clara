@@ -1,11 +1,94 @@
-# Archivos temporales de Firebase
+# ==========================================
+# 1. Entornos Virtuales y Caché de Python
+# ==========================================
+.venv/
+venv/
+ENV/
+env/
+env.bak/
+venv.bak/
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Distribución y empaquetado
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Logs y pruebas
+pip-log.txt
+pip-delete-this-directory.txt
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+cover/
+*.log
+
+# Herramientas y Linter
+.ruff_cache/
+.mypy_cache/
+.pytest_cache/
+pyrightconfig.json
+poetry.toml
+
+# ==========================================
+# 2. Claves Secretas y Variables de Entorno
+# ==========================================
+.env
+.env.local
+.env.*.local
+*.secret
+*.pem
+
+# ==========================================
+# 3. Archivos temporales de Firebase
+# ==========================================
 .firebase/
 firebase-debug.log
 firestore-debug.log
 ui-debug.log
 
-# Dependencias y sistema
+# ==========================================
+# 4. Node.js / Web (Archivos frontend)
+# ==========================================
 node_modules/
-.DS_Store
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ==========================================
+# 5. Dependencias y Sistema Operativo / Editor
+# ==========================================
+.vscode/
+.idea/
+*.swp
+*.bak
 Thumbs.db
-__pycache__/
+Desktop.ini
+.DS_Store
