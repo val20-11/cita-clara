@@ -92,3 +92,12 @@ yarn-error.log*
 Thumbs.db
 Desktop.ini
 .DS_Store
+
+# ==========================================
+# 6. Google Apps Script (clasp) y Cuentas de Servicio GCP
+# ==========================================
+.clasp.json
+.clasprc.json
+*service-account*.json
+*firebase-adminsdk*.json
+*-credentials.json
