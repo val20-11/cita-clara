@@ -718,8 +718,23 @@ function activarPanel(t, seccion, d, marcados, claveGuardado, extra) {
   }
 
   if (seccion === "fuentes") {
-    document.getElementById("esto-cambio").addEventListener("click", () =>
-      mostrarToast("Gracias. Una persona del equipo revisará la fuente oficial antes de actualizar la información."));
+    document.getElementById("esto-cambio").addEventListener("click", async (e) => {
+      const btn = e.currentTarget;
+      const detalle = prompt(`¿Qué cambió en "${t.nombre}"? (opcional)`) ?? "";
+      btn.disabled = true;
+      try {
+        if (!nube || typeof nube.avisarCambio !== "function") {
+          throw new Error("Sin conexión con el backend");
+        }
+        await nube.avisarCambio(t.id, t.nombre, detalle);
+        mostrarToast("Gracias. Enviamos el aviso al equipo para revisar este trámite.");
+      } catch (err) {
+        console.error(err);
+        mostrarToast("No se pudo enviar el aviso. Intenta de nuevo.");
+      } finally {
+        btn.disabled = false;
+      }
+    });
   }
 
   if (seccion === "reportar" && extra[1] === "espera") {

@@ -1,22 +1,18 @@
 /* =========================================================
-   nube.js — Conexión REAL con Firebase / Google Cloud
+   nube.js — Conexión con Backend de Cita Clara (Apps Script)
    ---------------------------------------------------------
-   Aquí está todo lo que habla con servicios en la nube:
-   1. Firestore  -> guarda y lee los reportes ciudadanos.
-   2. Gemini (Firebase AI Logic) -> responde en el asistente.
-   app.js carga este archivo con import() y, si falla
-   (por ejemplo sin internet), la página sigue funcionando.
+   - Guarda reportes y avisos de cambio vía Apps Script.
+   - Consulta a Gemini desde el backend (API key protegida).
+   - Mantiene lectura de Firestore si la necesitas en la vista.
    ========================================================= */
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-app.js";
 import {
-  getFirestore, collection, addDoc, getDocs, query, where, serverTimestamp,
+  getFirestore, collection, getDocs, query, where,
 } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-firestore.js";
-import { getAI, getGenerativeModel, GoogleAIBackend } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-ai.js";
 
-/* ---------- Configuración del proyecto ----------
-   Estos datos identifican al proyecto; son públicos por diseño.
-   La seguridad la ponen las reglas de Firestore (firestore.rules). */
+const BACKEND_URL = "https://script.google.com/macros/s/AKfycbydyRsWBx1SbdGXVqQwDqBEHrAzFeTuv38Eds0j4kfgn5gPOrCdqux6Z7VXdyf50boN/exec";
+
 const configuracion = {
   apiKey: "AIzaSyB_LhIuWDGY8I3uEueT_CXHRWTJNFLbllQ",
   authDomain: "cita-clara-fd1b4.firebaseapp.com",
@@ -29,9 +25,21 @@ const configuracion = {
 const app = initializeApp(configuracion);
 const db = getFirestore(app);
 
-/* ---------- 1. Firestore: reportes ---------- */
+async function llamarBackend(payload) {
+  const res = await fetch(BACKEND_URL, {
+    method: "POST",
+    headers: { "Content-Type": "text/plain;charset=utf-8" },
+    body: JSON.stringify(payload),
+  });
+  const data = await res.json();
+  if (!data.ok) {
+    throw new Error(data.error || "Error en el backend de Cita Clara");
+  }
+  return data.data;
+}
 
-// Convierte los documentos de una consulta en objetos simples.
+/* ---------- 1. Lectura de reportes ---------- */
+
 function aLista(resultado) {
   return resultado.docs.map((d) => {
     const datos = d.data();
@@ -39,7 +47,6 @@ function aLista(resultado) {
   });
 }
 
-// Lee los reportes de espera y de errores. Si se da un trámite, solo los de ese trámite.
 export async function leerReportes(tramite) {
   const espera = collection(db, "reportes_espera");
   const errores = collection(db, "reportes_error");
@@ -50,117 +57,84 @@ export async function leerReportes(tramite) {
   return { espera: aLista(rEspera), errores: aLista(rErrores) };
 }
 
-// Guarda "esperé X minutos en esta sede". El día y la hora son los del momento del reporte.
-export async function guardarEspera(tramite, sede, minutos) {
-  const ahora = new Date();
-  await addDoc(collection(db, "reportes_espera"), {
-    tramite, sede, minutos, dia: ahora.getDay(), hora: ahora.getHours(), creado: serverTimestamp(), demo: false,
+/* ---------- 2. Escrituras hacia Apps Script ---------- */
+
+export async function guardarEspera(tramite, sede, minutos, comentario = "") {
+  return llamarBackend({
+    accion: "reportarEspera",
+    tramiteId: tramite,
+    sede,
+    minutos,
+    comentario,
   });
 }
 
-// Guarda un reporte de problema. "error" es el id de un problema conocido o "otro".
-// extra puede llevar { categoria, texto } cuando el problema se escribió con palabras propias.
 export async function guardarError(tramite, error, extra = {}) {
-  await addDoc(collection(db, "reportes_error"), { tramite, error, ...extra, creado: serverTimestamp(), demo: false });
+  return llamarBackend({
+    accion: "reportarProblema",
+    tramiteId: tramite,
+    descripcion: error,
+    detalle: extra.texto || extra.categoria || JSON.stringify(extra),
+  });
 }
 
-/* ---------- 1b. Gemini como clasificador de texto ----------
-   Recibe lo que la persona escribió y decide si es uno de los problemas
-   conocidos del trámite o uno nuevo, y en qué categoría va.
-   (En la arquitectura propuesta esto lo haría Natural Language API.) */
-const CATEGORIAS = ["Documentos", "Portal", "Pago", "Sede", "Contraseña", "Fuente", "Otro"];
+export async function avisarCambio(tramiteId, nombreTramite, detalle = "") {
+  return llamarBackend({
+    accion: "avisarCambio",
+    tramiteId,
+    nombreTramite,
+    detalle,
+  });
+}
+
+/* ---------- 3. Asistente y clasificación vía backend ---------- */
+
+function buscarContextoTramite(tramiteId) {
+  if (typeof TRAMITES === "undefined" || !tramiteId) return null;
+  return TRAMITES.find((x) => x.id === tramiteId) || null;
+}
 
 export async function clasificarProblema(tramite, texto) {
-  const t = TRAMITES.find((x) => x.id === tramite);
-  const conocidos = t.errores.map((e) => `${e.id}: ${e.titulo} (${e.categoria})`).join("\n");
-  const prompt = `Clasifica el reporte de un ciudadano sobre el trámite "${t.nombre}".
-Problemas conocidos (id: título):
-${conocidos}
-Categorías válidas: ${CATEGORIAS.join(", ")}.
-Si el reporte describe lo mismo que un problema conocido, usa su id; si no, usa "otro".
-Reporte: """${texto.slice(0, 300)}"""
-Responde solo con JSON: {"error": "<id o otro>", "categoria": "<categoría válida>", "datosPersonales": <true si incluye nombre, CURP, RFC, teléfono, correo o domicilio de una persona>}`;
+  const t = buscarContextoTramite(tramite);
+  const conocidos = t ? t.errores.map((e) => `${e.id}: ${e.titulo} (${e.categoria})`).join(", ") : "";
+  const prompt =
+    `Clasifica este reporte ciudadano del trámite "${t ? t.nombre : tramite}" ` +
+    `(problemas conocidos: ${conocidos || "ninguno"}). ` +
+    `Responde solo con JSON válido con las llaves "error", "categoria" y "datosPersonales" (booleano): ` +
+    `"${String(texto || "").slice(0, 300)}"`;
 
-  for (const nombre of MODELOS) {
-    try {
-      const modelo = getGenerativeModel(ai, {
-        model: nombre,
-        generationConfig: { temperature: 0, maxOutputTokens: 1024, responseMimeType: "application/json" },
-      });
-      const json = JSON.parse((await modelo.generateContent(prompt)).response.text());
-      const error = t.errores.some((e) => e.id === json.error) ? json.error : "otro";
-      const conocido = t.errores.find((e) => e.id === error);
-      const categoria = conocido ? conocido.categoria : CATEGORIAS.includes(json.categoria) ? json.categoria : "Otro";
-      return { error, categoria, datosPersonales: json.datosPersonales === true };
-    } catch (e) {
-      console.warn(`Clasificación con ${nombre} falló`, e);
-    }
-  }
-  // Si Gemini no responde, el reporte se guarda igual como "otro" (sin texto, por precaución).
-  return { error: "otro", categoria: "Otro", datosPersonales: true };
-}
-
-/* ---------- 2. Gemini: asistente ---------- */
-
-// Arma el "contexto verificado" que Gemini puede usar: solo el catálogo de trámites.
-// Esto es la idea de RAG: el modelo responde con nuestra información, no con lo que "cree".
-function catalogoComoTexto() {
-  return TRAMITES.map((t) => [
-    `ID: ${t.id}`,
-    `Trámite: ${t.nombre} (${t.institucionNombre})`,
-    `Modalidad: ${t.tipo === "linea" ? "en línea" : "presencial"} · Cita: ${t.requiereCita} · Costo: ${t.costo}${t.nota ? " · " + t.nota : ""}`,
-    `Fuente oficial: ${t.fuente.sitio}. ${t.fuente.explicacion}`,
-    `Documentos: ${t.documentos.map((d) => `${d.texto} (${d.detalle}${d.aviso ? "; " + d.aviso : ""})`).join("; ")}`,
-    `Pasos: ${t.pasos.map((p, i) => `${i + 1}. ${p.texto}${p.enlace ? " [" + p.enlace + "]" : ""}`).join(" ")}`,
-    `Problemas frecuentes: ${t.errores.map((e) => `${e.titulo}: ${e.solucion}`).join(" | ")}`,
-    t.sedes ? `Sedes: ${t.sedes.map((s) => `${s.nombre}, ${s.direccion}, horario: ${s.horario}`).join(" | ")}` : "",
-  ].filter(Boolean).join("\n")).join("\n\n");
-}
-
-const instrucciones = `Eres el asistente de Cita Clara, una plataforma ciudadana (no oficial) que orienta sobre trámites en México.
-Reglas:
-- Responde SOLO con la información del CATÁLOGO de abajo. No inventes requisitos, costos, horarios ni direcciones.
-- Si la respuesta no está en el catálogo, dilo con honestidad y recomienda consultar el sitio oficial.
-- Español de México, lenguaje simple y amable, máximo 90 palabras. Texto plano, sin markdown ni asteriscos.
-- No pidas ni aceptes datos personales (CURP, RFC, nombre). Si te los dan, no los repitas.
-- No inventes tiempos de espera: esos se calculan con reportes ciudadanos en la página de cada trámite.
-- Al final escribe una línea exactamente así: FUENTE: <ID del trámite usado> (o FUENTE: ninguna).
-
-CATÁLOGO VERIFICADO:
-${catalogoComoTexto()}`;
-
-const ai = getAI(app, { backend: new GoogleAIBackend() });
-
-// Dos modelos: si el principal está saturado se usa el de respaldo.
-const MODELOS = ["gemini-3.5-flash", "gemini-3.5-flash-lite"];
-const chats = {}; // una conversación por modelo, para que recuerde lo anterior
-
-function obtenerChat(nombreModelo) {
-  if (!chats[nombreModelo]) {
-    const modelo = getGenerativeModel(ai, {
-      model: nombreModelo,
-      systemInstruction: instrucciones,
-      generationConfig: { temperature: 0.3, maxOutputTokens: 2048 },
+  try {
+    const data = await llamarBackend({
+      accion: "preguntar",
+      pregunta: prompt,
+      contextoTramite: t ? { id: t.id, nombre: t.nombre } : { id: tramite },
     });
-    chats[nombreModelo] = modelo.startChat();
+    const limpio = String(data.respuesta || "").replace(/```json|```/gi, "").trim();
+    const json = JSON.parse(limpio);
+    const errorValido = t && t.errores.some((e) => e.id === json.error) ? json.error : "otro";
+    return {
+      error: errorValido,
+      categoria: json.categoria || "Otro",
+      datosPersonales: json.datosPersonales === true,
+    };
+  } catch {
+    return { error: "otro", categoria: "Otro", datosPersonales: true };
   }
-  return chats[nombreModelo];
 }
 
-// Envía la pregunta a Gemini y separa la respuesta de la línea "FUENTE: ...".
-export async function preguntarGemini(pregunta) {
-  let ultimoError;
-  for (const nombre of MODELOS) {
-    try {
-      const resultado = await obtenerChat(nombre).sendMessage(pregunta);
-      const texto = resultado.response.text().trim();
-      const coincide = texto.match(/FUENTE:\s*([a-z]+)\s*$/i);
-      const fuente = coincide && coincide[1].toLowerCase() !== "ninguna" ? coincide[1].toLowerCase() : null;
-      return { respuesta: texto.replace(/\n?FUENTE:.*$/i, "").replace(/\*\*/g, "").trim(), fuente, modelo: nombre };
-    } catch (e) {
-      ultimoError = e;
-      delete chats[nombre];
-    }
-  }
-  throw ultimoError;
+export async function preguntarGemini(pregunta, tramiteId = null) {
+  const contextoTramite = buscarContextoTramite(tramiteId);
+  const data = await llamarBackend({
+    accion: "preguntar",
+    pregunta,
+    contextoTramite,
+  });
+  const texto = String(data.respuesta || "").trim();
+  const coincide = texto.match(/FUENTE:\s*([a-z0-9_-]+)\s*$/i);
+  const fuente = coincide && coincide[1].toLowerCase() !== "ninguna" ? coincide[1].toLowerCase() : null;
+  return {
+    respuesta: texto.replace(/\n?FUENTE:.*$/i, "").replace(/\*\*/g, "").trim(),
+    fuente,
+    modelo: "gemini-3.8-flash",
+  };
 }
