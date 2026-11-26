@@ -3,7 +3,7 @@
    ---------------------------------------------------------
    - Guarda reportes y avisos de cambio vía Apps Script.
    - Consulta a Gemini desde el backend (API key protegida).
-   - Mantiene lectura de Firestore si la necesitas en la vista.
+   - Lee catálogo y reportes desde Firestore; el catálogo es de solo lectura en cliente.
    ========================================================= */
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-app.js";
@@ -24,6 +24,33 @@ const configuracion = {
 
 const app = initializeApp(configuracion);
 const db = getFirestore(app);
+
+
+/* ---------- 0. Catálogo público de trámites ---------- */
+
+// El catálogo se administra con Firebase Admin SDK desde scripts/cargar_catalogo.py.
+// Las reglas permiten leerlo desde el navegador, pero no escribirlo.
+export async function leerCatalogo() {
+  const referencia = collection(db, "catalogo_tramites");
+  const resultado = await getDocs(referencia);
+
+  if (resultado.empty) {
+    throw new Error("La colección catalogo_tramites está vacía. Ejecuta el script de carga inicial.");
+  }
+
+  const documentos = resultado.docs
+    .map((doc) => ({ idDocumento: doc.id, datos: doc.data() }))
+    .sort((a, b) => Number(a.datos.orden ?? 9999) - Number(b.datos.orden ?? 9999));
+
+  const tramites = documentos.map(({ idDocumento, datos }) => {
+    const { fechaConsulta, versionCatalogo, actualizadoEn, orden, ...tramite } = datos;
+    if (!tramite.id) tramite.id = idDocumento;
+    return tramite;
+  });
+
+  const fechaConsulta = documentos.find((x) => x.datos.fechaConsulta)?.datos.fechaConsulta || null;
+  return { tramites, fechaConsulta };
+}
 
 async function llamarBackend(payload) {
   const res = await fetch(BACKEND_URL, {
