@@ -12,13 +12,15 @@
      NO están aquí. Se calculan con los reportes ciudadanos guardados
      en Firestore (ver nube.js). Algunos reportes de arranque están
      marcados como demo: true.
-   En producción este catálogo viviría en BigQuery.
+   Fuente principal: colección Firestore "catalogo_tramites".
+   Este arreglo se conserva como respaldo sin conexión.
    ========================================================= */
 
-const FECHA_CONSULTA = "2026-11-04";
+// Respaldo local: Firestore es la fuente principal del catálogo.
+let FECHA_CONSULTA = "2026-11-04";
 
 
-const TRAMITES = [
+let TRAMITES = [
   /* ---------- 1. e.firma (recorrido principal) ---------- */
   {
     id: "efirma",

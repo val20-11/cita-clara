@@ -1066,12 +1066,36 @@ function router() {
 
 window.addEventListener("hashchange", router);
 
-// Primero se carga la conexión con la nube (Firestore + Gemini) y luego se dibuja la página.
-// Si no carga en 5 segundos o falla (sin internet), la página funciona sin ella.
+// Firestore es la fuente principal del catálogo. El arreglo de datos.js queda
+// disponible como respaldo si no hay conexión o la colección aún no se ha sembrado.
+let routerYaIniciado = false;
+const cargaNube = import("./nube.js").then(async (modulo) => {
+  nube = modulo;
+  try {
+    const catalogo = await modulo.leerCatalogo();
+    if (!Array.isArray(catalogo.tramites) || catalogo.tramites.length === 0) {
+      throw new Error("Firestore devolvió un catálogo vacío.");
+    }
+    TRAMITES = catalogo.tramites;
+    if (catalogo.fechaConsulta) FECHA_CONSULTA = catalogo.fechaConsulta;
+    console.info(`Catálogo cargado desde Firestore: ${TRAMITES.length} trámites.`);
+    // Si ya mostramos el respaldo por superar el tiempo límite, actualizamos la vista.
+    if (routerYaIniciado) router();
+  } catch (e) {
+    console.warn("No se pudo cargar el catálogo de Firestore; se conserva el respaldo local.", e);
+  }
+}).catch((e) => {
+  console.warn("No se pudo inicializar la conexión con la nube.", e);
+});
+
+// No bloquea indefinidamente la interfaz si Firestore tarda en responder.
 Promise.race([
-  import("./nube.js").then((modulo) => { nube = modulo; }),
+  cargaNube,
   new Promise((resolver) => setTimeout(resolver, 5000)),
-]).catch((e) => console.warn("Sin conexión con la nube", e)).finally(router);
+]).finally(() => {
+  routerYaIniciado = true;
+  router();
+});
 
 // Botón "Menú" en celular.
 document.getElementById("menu-movil").addEventListener("click", (e) => {

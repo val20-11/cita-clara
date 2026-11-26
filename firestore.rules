@@ -1,12 +1,16 @@
 rules_version = '2';
 
 // Reglas de seguridad de Firestore para Cita Clara.
-// - Lectura pública en reportes_espera y reportes_error para mostrar tiempos,
-//   problemas frecuentes y el panel de transparencia.
-// - Escritura bloqueada desde el navegador: solo el backend en Google Apps Script
-//   escribe mediante Firestore REST API autenticado como cuenta de servicio.
+// El catálogo es público de solo lectura. Su carga y actualización se hacen
+// desde un entorno administrativo con Firebase Admin SDK (no desde el navegador).
+// Los reportes se leen desde el cliente, pero las escrituras pasan por Apps Script.
 service cloud.firestore {
   match /databases/{database}/documents {
+
+    match /catalogo_tramites/{id} {
+      allow read: if true;
+      allow write: if false;
+    }
 
     match /reportes_espera/{id} {
       allow read: if true;
@@ -23,6 +27,7 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // Denegación por defecto para cualquier otra colección/documento.
     match /{document=**} {
       allow read, write: if false;
     }
