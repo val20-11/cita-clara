@@ -70,7 +70,9 @@ async function llamarBackend(payload) {
 function aLista(resultado) {
   return resultado.docs.map((d) => {
     const datos = d.data();
-    return { ...datos, creado: datos.creado ? datos.creado.toDate() : new Date() };
+    const c = datos.creado;
+    const creado = c && typeof c.toDate === "function" ? c.toDate() : new Date(c || datos.creadoEn || Date.now());
+    return { ...datos, creado: isNaN(creado) ? new Date() : creado };
   });
 }
 
@@ -101,7 +103,8 @@ export async function guardarError(tramite, error, extra = {}) {
     accion: "reportarProblema",
     tramiteId: tramite,
     descripcion: error,
-    detalle: extra.texto || extra.categoria || JSON.stringify(extra),
+    categoria: extra.categoria || "",
+    texto: extra.texto || "",
   });
 }
 

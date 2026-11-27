@@ -7,20 +7,27 @@ patrones creíbles (por ejemplo: menos espera los martes por la mañana).
 Todos llevan demo: true, y la página muestra la etiqueta
 "Incluye reportes de demostración".
 
-Usa la API REST de Firestore con la clave pública del proyecto, así que
-pasa por las mismas reglas de seguridad que la página (firestore.rules).
+Las reglas (firestore.rules) bloquean escrituras desde el navegador, así que
+este script usa una cuenta de servicio, igual que cargar_catalogo.py.
 
-Uso:  python scripts/sembrar_demo.py
+Uso:
+  pip install -r scripts/requirements-catalogo.txt
+  $env:GOOGLE_APPLICATION_CREDENTIALS="C:\\ruta\\segura\\service-account.json"   (PowerShell)
+  python scripts/sembrar_demo.py
 Para borrarlos: consola de Firebase > Firestore > borrar las colecciones.
 """
 import json
+import os
 import random
 import secrets
+import sys
 import urllib.request
 
-PROYECTO = "cita-clara-fd1b4"
-CLAVE = "AIzaSyB_LhIuWDGY8I3uEueT_CXHRWTJNFLbllQ"
-URL = f"https://firestore.googleapis.com/v1/projects/{PROYECTO}/databases/(default)/documents:commit?key={CLAVE}"
+from google.auth.transport.requests import Request
+from google.oauth2 import service_account
+
+PROYECTO = os.getenv("FIREBASE_PROJECT_ID", "cita-clara-fd1b4")
+URL = f"https://firestore.googleapis.com/v1/projects/{PROYECTO}/databases/(default)/documents:commit"
 BASE = f"projects/{PROYECTO}/databases/(default)/documents"
 
 random.seed(2026)
@@ -119,8 +126,18 @@ for tramite, errores in ({} if SOLO else ERRORES).items():
     for error, cantidad in errores.items():
         escrituras += [doc_error(tramite, error) for _ in range(cantidad)]
 
+ruta_cred = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+if not ruta_cred:
+    sys.exit("Define GOOGLE_APPLICATION_CREDENTIALS con la ruta a la cuenta de servicio.")
+cred = service_account.Credentials.from_service_account_file(
+    ruta_cred, scopes=["https://www.googleapis.com/auth/datastore"]
+)
+cred.refresh(Request())
+
 peticion = urllib.request.Request(
-    URL, data=json.dumps({"writes": escrituras}).encode(), headers={"Content-Type": "application/json"}
+    URL,
+    data=json.dumps({"writes": escrituras}).encode(),
+    headers={"Content-Type": "application/json", "Authorization": f"Bearer {cred.token}"},
 )
 with urllib.request.urlopen(peticion) as respuesta:
     resultado = json.load(respuesta)

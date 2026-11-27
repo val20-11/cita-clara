@@ -50,27 +50,33 @@ function manejarReportarEspera(body) {
   if (!tramiteId || minutos === undefined) {
     throw new Error('Faltan tramiteId o minutos');
   }
+  // Mismos campos que lee public/nube.js y que usa scripts/sembrar_demo.py.
+  const ahora = new Date();
   return guardarEnFirestore('reportes_espera', {
-    tramiteId: String(tramiteId),
+    tramite: String(tramiteId),
     sede: String(sede || 'General'),
-    minutos: Number(minutos),
+    minutos: Math.round(Number(minutos)),
     comentario: String(comentario || ''),
-    creadoEn: new Date().toISOString()
+    dia: Number(Utilities.formatDate(ahora, 'America/Mexico_City', 'u')) % 7, // 0 = domingo
+    hora: Number(Utilities.formatDate(ahora, 'America/Mexico_City', 'H')),
+    creado: ahora
   });
 }
 
 // --- 2. Reportar problema ---
 function manejarReportarProblema(body) {
-  const { tramiteId, descripcion, detalle } = body;
+  const { tramiteId, descripcion, categoria, texto } = body;
   if (!tramiteId || !descripcion) {
     throw new Error('Faltan tramiteId o descripcion');
   }
-  return guardarEnFirestore('reportes_problemas', {
-    tramiteId: String(tramiteId),
-    descripcion: String(descripcion),
-    detalle: String(detalle || ''),
-    creadoEn: new Date().toISOString()
-  });
+  const datos = {
+    tramite: String(tramiteId),
+    error: String(descripcion),
+    creado: new Date()
+  };
+  if (categoria) datos.categoria = String(categoria);
+  if (texto) datos.texto = String(texto).slice(0, 500);
+  return guardarEnFirestore('reportes_error', datos);
 }
 
 // --- 3. Preguntar a Gemini ---
@@ -132,7 +138,7 @@ function revisionSemanalRequisitos() {
     throw new Error('Faltan GEMINI_API_KEY o CORREOS_EQUIPO');
   }
 
-  const tramites = leerColeccionFirestore('tramites');
+  const tramites = leerColeccionFirestore('catalogo_tramites');
   if (!tramites.length) return;
 
   const prompt =
@@ -226,6 +232,10 @@ function guardarEnFirestore(coleccion, datos) {
     const val = datos[k];
     if (typeof val === 'number') {
       fields[k] = Number.isInteger(val) ? { integerValue: String(val) } : { doubleValue: val };
+    } else if (val instanceof Date) {
+      fields[k] = { timestampValue: val.toISOString() };
+    } else if (typeof val === 'boolean') {
+      fields[k] = { booleanValue: val };
     } else {
       fields[k] = { stringValue: String(val) };
     }
